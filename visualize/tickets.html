@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的火车票</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+
+/* 顶部工具栏 */
+.toolbar {
+    position: sticky; top: 0; z-index: 100;
+    background: #16213e; padding: 12px 24px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    border-bottom: 1px solid #0f3460;
+}
+.toolbar h1 { font-size: 20px; white-space: nowrap; }
+.toolbar .count { color: #888; font-size: 14px; }
+.toolbar .btn {
+    padding: 8px 16px; border: 1px solid #0f3460; border-radius: 6px;
+    background: #0f3460; color: #eee; cursor: pointer; font-size: 14px;
+    transition: all .2s;
+}
+.toolbar .btn:hover { background: #1a4a8a; }
+.toolbar .btn.active { background: #e94560; border-color: #e94560; }
+.toolbar .filter-group { display: flex; gap: 8px; align-items: center; }
+.toolbar select {
+    padding: 8px 12px; border: 1px solid #0f3460; border-radius: 6px;
+    background: #0f3460; color: #eee; font-size: 14px; cursor: pointer;
+}
+
+/* 相册网格 */
+.gallery {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+    gap: 28px; padding: 28px;
+}
+
+/* ====== 车票卡片 ====== */
+.ticket {
+    position: relative;
+    border-radius: 20px; cursor: pointer;
+    transition: transform .15s ease-out, box-shadow .3s;
+    box-shadow: 0 4px 24px rgba(0,0,0,.45);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    aspect-ratio: 1.58 / 1;
+    font-family: "STSong", "Songti SC", "Noto Serif SC", "SimSun", serif;
+    padding: 16px 20px 12px;
+    border: 1px solid transparent;
+    opacity: 0;
+}
+.ticket.visible {
+    animation: dealIn .45s cubic-bezier(.22,.61,.36,1) forwards;
+}
+.ticket:hover { box-shadow: 0 8px 40px rgba(0,0,0,.6); }
+
+/* 票面光泽扫过 */
+.ticket::after {
+    content: '';
+    position: absolute; inset: 0; z-index: 20; pointer-events: none;
+    background: linear-gradient(105deg,
+        transparent 40%, rgba(255,255,255,0.18) 45%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.18) 55%, transparent 60%);
+    background-size: 200% 100%;
+    opacity: 0;
+    animation: shineSweep 1.4s ease-in-out forwards;
+}
+@keyframes shineSweep {
+    0% { opacity: 0; background-position: 150% 0; }
+    30% { opacity: 1; }
+    100% { opacity: 0; background-position: -50% 0; }
+}
+
+@keyframes dealIn {
+    from { opacity: 0; transform: translateY(80px) rotate(-5deg) scale(0.85); }
+    to { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+}
+
+/* 蓝票 */
+.ticket.blue {
+    background: linear-gradient(180deg, #bfe6ff 0%, #e6f7ff 55%, #4db9e6 100%);
+    color: #111318;
+    border-color: rgba(31,82,112,0.18);
+}
+.ticket.blue .route-underline { background: rgba(16,24,38,0.78); }
+.ticket.blue .notice-box { border-color: rgba(30,52,72,0.55); color: rgba(20,31,43,0.9); }
+.ticket.blue .serial { color: #e48daa; }
+.ticket.blue .qr-cell.filled { background: #101418; }
+
+/* 红票 */
+.ticket.red {
+    background: linear-gradient(180deg, #f2cecc 0%, #f5dddb 55%, #dda9a6 100%);
+    color: #2a1010;
+    border-color: rgba(112,60,30,0.18);
+}
+.ticket.red .route-underline { background: rgba(42,16,16,0.78); }
+.ticket.red .notice-box { border-color: rgba(72,30,20,0.55); color: rgba(42,16,16,0.9); }
+.ticket.red .serial { color: #c44a6a; }
+.ticket.red .qr-cell.filled { background: #2a1010; }
+
+/* 状态水印 */
+.ticket .status-watermark {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-22deg);
+    font-size: 52px; font-weight: 900; opacity: 0.10; pointer-events: none;
+    white-space: nowrap; z-index: 10; letter-spacing: 10px;
+    font-family: 'SimHei', 'PingFang SC', sans-serif;
+}
+.ticket .status-watermark.退票 { color: #c62828; opacity: 0.13; }
+.ticket .status-watermark.改签 { color: #d84315; opacity: 0.12; }
+
+/* 顶部行：编号 + 检票口 */
+.ticket-topline {
+    display: flex; align-items: baseline; gap: 6px;
+    font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+    letter-spacing: 0.02em;
+}
+.ticket-topline .serial {
+    font-size: 18px; font-weight: 700;
+}
+.ticket-topline .gate {
+    margin-left: auto; font-size: 14px; font-weight: 500;
+    opacity: 0.82;
+}
+
+/* 路线区：出发 | 车次 | 到达 */
+.ticket-route {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 8px; flex: 1;
+}
+.ticket-depart {
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: 8px; flex: 1; min-width: 0;
+}
+.ticket-depart .station {
+    font-size: 30px; font-weight: 700; line-height: 1;
+    letter-spacing: 0.14em; white-space: nowrap;
+}
+.ticket-depart .date {
+    font-size: 20px; font-weight: 700; letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+.ticket-depart .price {
+    font-size: 20px; font-weight: 700;
+}
+
+.ticket-train {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 4px; padding: 0 6px; flex-shrink: 0;
+}
+.ticket-train .code {
+    font-size: 30px; font-weight: 700; line-height: 1;
+    letter-spacing: 0.08em;
+}
+.ticket-train .route-underline {
+    width: 70px; height: 3px; border-radius: 999px;
+    transform: skewX(-24deg);
+}
+
+.ticket-arrive {
+    display: flex; flex-direction: column; align-items: flex-end;
+    gap: 8px; flex: 1;
+}
+.ticket-arrive .station {
+    font-size: 30px; font-weight: 700; line-height: 1;
+    letter-spacing: 0.14em; white-space: nowrap;
+}
+.ticket-arrive .seat {
+    font-size: 20px; font-weight: 700;
+}
+.ticket-arrive .comfort {
+    font-size: 20px; font-weight: 600;
+}
+
+/* 乘客 */
+.ticket-passenger {
+    font-size: 20px; font-weight: 700;
+    padding: 4px 0 2px;
+}
+
+/* 须知 + 二维码 */
+.ticket-notice-area {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 12px; margin-top: 8px;
+}
+.notice-box {
+    flex: 1; padding: 6px 10px 4px;
+    border: 2px dashed;
+    text-align: center; font-size: 13px;
+    background: rgba(255,255,255,0.12);
+    line-height: 1.5;
+    font-weight: 600;
+}
+.notice-box .notice-title {
+    display: block; font-size: 16px; font-weight: 700;
+}
+.notice-box .notice-sub {
+    display: block; font-size: 13px;
+}
+
+/* 二维码 */
+.ticket-qr {
+    width: 80px; aspect-ratio: 1; padding: 5px;
+    background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(0,0,0,0.08);
+    flex-shrink: 0; position: relative;
+}
+.ticket-qr::after {
+    content: '';
+    position: absolute; inset: -3px;
+    border-radius: 3px;
+    animation: qrGlow 2.5s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes qrGlow {
+    0%, 100% { box-shadow: 0 0 0 rgba(0,0,0,0); }
+    50% { box-shadow: 0 0 12px 2px rgba(255,255,255,0.5); }
+}
+.ticket-qr .qr-grid {
+    width: 100%; height: 100%;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(7, 1fr);
+    gap: 2px;
+}
+.ticket-qr .qr-cell {
+    background: transparent;
+}
+
+/* 底部编号 */
+.ticket-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 18px; padding-top: 4px;
+    font: 700 16px/1 "SF Mono", "Menlo", monospace;
+    letter-spacing: 0.06em; opacity: 0.88;
+}
+
+/* 幻灯片模式 */
+.slideshow-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.92); flex-direction: column;
+    align-items: center; justify-content: center;
+}
+.slideshow-overlay.active { display: flex; }
+.slideshow-overlay .slide-container {
+    position: relative; display: flex; align-items: center; gap: 24px;
+}
+.slideshow-overlay .ticket {
+    width: 620px; cursor: default;
+}
+.slideshow-overlay .ticket:hover { transform: none; }
+.slideshow-overlay .ticket .station { font-size: 36px; }
+.slideshow-overlay .ticket .code { font-size: 36px; }
+.slideshow-overlay .ticket .date { font-size: 24px; }
+.slideshow-overlay .ticket .price { font-size: 24px; }
+.slideshow-overlay .ticket .seat { font-size: 24px; }
+.slideshow-overlay .ticket .comfort { font-size: 24px; }
+.slideshow-overlay .ticket .status-watermark { font-size: 68px; }
+.slideshow-nav {
+    color: #fff; font-size: 52px; cursor: pointer; padding: 24px;
+    user-select: none; opacity: .5; transition: opacity .2s;
+}
+.slideshow-nav:hover { opacity: 1; }
+.slideshow-counter {
+    color: #888; margin-top: 24px; font-size: 15px;
+}
+.slideshow-close {
+    position: absolute; top: 24px; right: 36px;
+    color: #fff; font-size: 40px; cursor: pointer; opacity: .5;
+}
+.slideshow-close:hover { opacity: 1; }
+
+/* 日期分隔 */
+.day-divider {
+    grid-column: 1 / -1;
+    padding: 18px 0 8px;
+    color: #e94560; font-size: 15px; font-weight: bold;
+    border-bottom: 1px solid #333;
+    display: flex; align-items: baseline; gap: 8px;
+    animation: dividerIn .5s ease-out;
+}
+.day-divider .day-count { color: #888; font-size: 12px; font-weight: normal; }
+.day-divider:first-child { padding-top: 0; animation: none; }
+@keyframes dividerIn {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* 幻灯片切换动画 */
+.slide-in-right {
+    animation: slideInRight .35s cubic-bezier(.22,.61,.36,1) forwards !important;
+}
+.slide-in-left {
+    animation: slideInLeft .35s cubic-bezier(.22,.61,.36,1) forwards !important;
+}
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(60px) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-60px) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* 空状态 */
+.empty { text-align: center; padding: 60px; color: #666; font-size: 18px; }
+
+/* ====== 移动端适配 ====== */
+@media (max-width: 520px) {
+    /* 工具栏 */
+    .toolbar {
+        padding: 8px 12px; gap: 8px;
+    }
+    .toolbar h1 { font-size: 16px; }
+    .toolbar .count { font-size: 12px; }
+    .toolbar .btn {
+        padding: 6px 10px; font-size: 12px; border-radius: 4px;
+    }
+    .toolbar select {
+        padding: 6px 8px; font-size: 12px;
+    }
+    .toolbar .filter-group {
+        width: 100%; gap: 4px; flex-wrap: wrap;
+    }
+    .toolbar .filter-group select {
+        flex: 1; min-width: 0;
+    }
+
+    /* 相册网格 */
+    .gallery {
+        grid-template-columns: 1fr;
+        gap: 16px; padding: 12px;
+    }
+    
+    /* 车票卡片 */
+    .ticket {
+        aspect-ratio: auto;
+        padding: 10px 12px 8px;
+        border-radius: 14px;
+    }
+    .ticket .status-watermark {
+        font-size: 32px; letter-spacing: 6px;
+    }
+
+    /* 顶部行 */
+    .ticket-topline .serial { font-size: 14px; }
+    .ticket-topline .gate { font-size: 11px; }
+
+    /* 路线区 */
+    .ticket-route { gap: 4px; }
+    .ticket-depart { gap: 4px; }
+    .ticket-depart .station { font-size: 22px; letter-spacing: 0.08em; }
+    .ticket-depart .date { font-size: 15px; }
+    .ticket-depart .price { font-size: 15px; }
+
+    .ticket-train { padding: 0 4px; }
+    .ticket-train .code { font-size: 22px; }
+    .ticket-train .route-underline { width: 50px; height: 2px; }
+
+    .ticket-arrive { gap: 4px; }
+    .ticket-arrive .station { font-size: 22px; letter-spacing: 0.08em; }
+    .ticket-arrive .seat { font-size: 15px; }
+    .ticket-arrive .comfort { font-size: 15px; }
+
+    /* 乘客 */
+    .ticket-passenger { font-size: 16px; }
+
+    /* 须知 + 二维码 */
+    .ticket-notice-area { gap: 8px; margin-top: 4px; }
+    .notice-box { padding: 4px 8px 3px; }
+    .notice-box .notice-title { font-size: 13px; }
+    .notice-box .notice-sub { font-size: 11px; }
+
+    .ticket-qr { width: 56px; padding: 3px; }
+    .ticket-qr .qr-grid { gap: 1px; }
+
+    /* 底部编号 */
+    .ticket-footer {
+        font-size: 12px; padding-top: 2px; gap: 8px;
+    }
+
+    /* 幻灯片 */
+    .slideshow-overlay .slide-container { gap: 0; }
+    .slideshow-overlay .ticket {
+        width: calc(100vw - 64px);
+    }
+    .slideshow-overlay .ticket .station { font-size: 24px; }
+    .slideshow-overlay .ticket .code { font-size: 24px; }
+    .slideshow-overlay .ticket .date { font-size: 18px; }
+    .slideshow-overlay .ticket .price { font-size: 18px; }
+    .slideshow-overlay .ticket .seat { font-size: 18px; }
+    .slideshow-overlay .ticket .comfort { font-size: 18px; }
+    .slideshow-overlay .ticket .status-watermark { font-size: 40px; }
+    .slideshow-nav { font-size: 36px; padding: 12px; }
+    .slideshow-close { top: 16px; right: 20px; font-size: 30px; }
+    .slideshow-counter { margin-top: 16px; font-size: 13px; }
+
+    /* 日期分隔 */
+    .day-divider { font-size: 13px; padding: 12px 0 6px; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+    <h1>我的火车票</h1>
+    <span class="count" id="count"></span>
+    <div class="filter-group">
+        <select id="yearFilter"><option value="">全部年份</option></select>
+        <select id="statusFilter">
+            <option value="">全部状态</option>
+            <option value="正常">正常</option>
+            <option value="已改签">已改签</option>
+            <option value="已退票">已退票</option>
+        </select>
+        <select id="typeFilter">
+            <option value="">全部类型</option>
+            <option value="blue">高铁/动车/城际</option>
+            <option value="red">普速列车</option>
+        </select>
+        <select id="nameFilter"><option value="">全部乘客</option></select>
+    </div>
+    <button class="btn active" id="btnGallery" onclick="setMode('gallery')">相册</button>
+    <button class="btn" id="btnSlide" onclick="openSlideshow()">幻灯片</button>
+</div>
+
+<div class="gallery" id="gallery"></div>
+
+<div class="slideshow-overlay" id="slideshow">
+    <div class="slideshow-close" onclick="closeSlideshow()">✕</div>
+    <div class="slide-container">
+        <div class="slideshow-nav" onclick="slideNav(-1)">‹</div>
+        <div id="slideContent"></div>
+        <div class="slideshow-nav" onclick="slideNav(1)">›</div>
+    </div>
+    <div class="slideshow-counter" id="slideCounter"></div>
+</div>
+
+<script>
+// 数据由 Python 脚本注入
+const TICKETS = __DATA_PLACEHOLDER__;
+
+let currentMode = 'gallery';
+let slideIndex = 0;
+let slideDirection = 0;
+let filteredTickets = [];
+
+function isBlueTicket(t) {
+    return /^[GDC]/.test(t.train_no);
+}
+
+// 根据订单号生成二维码图案（确定性）
+function genQRPattern(seed) {
+    const total = 49; // 7x7
+    const filled = new Set();
+    // 定位图案：左上角
+    [0,1,2,7,8,9,14,15,16].forEach(i => filled.add(i));
+    // 定位图案：右上角
+    [4,5,6,11,12,13,18,19,20].forEach(i => filled.add(i));
+    // 定位图案：左下角
+    [28,29,30,35,36,37,42,43,44].forEach(i => filled.add(i));
+    // 根据种子生成数据区域
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+        hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+        hash |= 0;
+    }
+    for (let i = 0; i < total; i++) {
+        if (filled.has(i)) continue;
+        if (((hash >> (i % 31)) & 1) === 1) filled.add(i);
+    }
+    return filled;
+}
+
+function renderTicket(t) {
+    const type = isBlueTicket(t) ? 'blue' : 'red';
+    const hasStatus = t.status !== '正常';
+    const statusText = hasStatus ? t.status : '';
+    const statusClass = t.status === '已退票' ? '退票' : '改签';
+
+    const [date, time] = t.departure_time.split(' ');
+
+    // 生成序列号
+    const serial = (t.order_number || 'E' + Math.random().toString(36).substring(2, 10)).substring(0, 8);
+    const seed = t.order_number || t.departure_time + t.name;
+    const qrCells = genQRPattern(seed);
+
+    // 二维码格子
+    let qrHTML = '';
+    for (let i = 0; i < 49; i++) {
+        const cls = qrCells.has(i) ? 'qr-cell filled' : 'qr-cell';
+        qrHTML += '<span class="' + cls + '"></span>';
+    }
+
+    // 席别显示
+    const comfortText = t.seat_class;
+
+    return `
+    <div class="ticket ${type}" onclick="openSlideshow(${filteredTickets.indexOf(t)})">
+        ${hasStatus ? '<div class="status-watermark ' + statusClass + '">' + statusText + '</div>' : ''}
+        <div class="ticket-topline">
+            <span class="serial">${serial}</span>
+            <span class="gate">${t.gate ? '候车：' + t.gate : ''}</span>
+        </div>
+        <div class="ticket-route">
+            <div class="ticket-depart">
+                <div class="station">${t.from_station}</div>
+                <div class="date">${date} ${time}开</div>
+                <div class="price">￥${t.price_value.toFixed(1)}</div>
+            </div>
+            <div class="ticket-train">
+                <div class="code">${t.train_no}</div>
+                <div class="route-underline"></div>
+            </div>
+            <div class="ticket-arrive">
+                <div class="station">${t.to_station}</div>
+                <div class="seat">${t.seat_no}</div>
+                <div class="comfort">${comfortText}</div>
+            </div>
+        </div>
+        <div class="ticket-passenger">${t.name}</div>
+        <div class="ticket-notice-area">
+            <div class="notice-box">
+                <span class="notice-title">报销凭证 遗失不补</span>
+                <span class="notice-sub">退票改签时须交回车站</span>
+            </div>
+            <div class="ticket-qr">
+                <div class="qr-grid">${qrHTML}</div>
+            </div>
+        </div>
+        <div class="ticket-footer">
+            <span>${t.order_number || ''}</span>
+        </div>
+    </div>`;
+}
+
+function applyFilters() {
+    const year = document.getElementById('yearFilter').value;
+    const status = document.getElementById('statusFilter').value;
+    const type = document.getElementById('typeFilter').value;
+    const name = document.getElementById('nameFilter').value;
+
+    filteredTickets = TICKETS.filter(t => {
+        if (year && !t.departure_time.startsWith(year)) return false;
+        if (status && t.status !== status) return false;
+        if (type === 'blue' && !isBlueTicket(t)) return false;
+        if (type === 'red' && isBlueTicket(t)) return false;
+        if (name && t.name !== name) return false;
+        return true;
+    });
+
+    renderGallery();
+}
+
+function renderGallery() {
+    const gallery = document.getElementById('gallery');
+    gallery.className = 'gallery';
+
+    if (filteredTickets.length === 0) {
+        gallery.innerHTML = '<div class="empty">没有符合条件的车票</div>';
+        document.getElementById('count').textContent = '';
+        return;
+    }
+
+    document.getElementById('count').textContent = '共 ' + filteredTickets.length + ' 张';
+
+    let html = '';
+    let lastDate = '';
+    let dayTickets = [];
+    for (const t of filteredTickets) {
+        const d = t.departure_time.substring(0, 10);
+        if (d !== lastDate) {
+            if (dayTickets.length > 0) {
+                html += '<div class="day-divider">' + lastDate + ' <span class="day-count">' + dayTickets.length + '张</span></div>';
+                html += dayTickets.join('');
+            }
+            dayTickets = [];
+            lastDate = d;
+        }
+        dayTickets.push(renderTicket(t));
+    }
+    if (dayTickets.length > 0) {
+        html += '<div class="day-divider">' + lastDate + ' <span class="day-count">' + dayTickets.length + '张</span></div>';
+        html += dayTickets.join('');
+    }
+    gallery.innerHTML = html;
+
+    // 设置错位延迟 + 3D 倾斜事件
+    const cards = gallery.querySelectorAll('.ticket');
+    cards.forEach((card, i) => {
+        card.style.animationDelay = (i * 0.03) + 's';
+        card.addEventListener('mousemove', handleTilt);
+        card.addEventListener('mouseleave', resetTilt);
+    });
+
+    // 重新观察所有卡片
+    observeCards();
+}
+
+function handleTilt(e) {
+    const card = e.currentTarget;
+    const rect = card.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    card.style.transform = `perspective(800px) rotateY(${x * 8}deg) rotateX(${-y * 8}deg) scale(1.02)`;
+}
+
+function resetTilt(e) {
+    e.currentTarget.style.transform = '';
+}
+
+function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('btnGallery').classList.toggle('active', mode === 'gallery');
+    renderGallery();
+}
+
+function openSlideshow(index) {
+    if (typeof index === 'number') slideIndex = index;
+    else slideIndex = 0;
+    if (filteredTickets.length === 0) return;
+    document.getElementById('slideshow').classList.add('active');
+    document.body.style.overflow = 'hidden';
+    showSlide();
+}
+
+function closeSlideshow() {
+    document.getElementById('slideshow').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function slideNav(dir) {
+    slideDirection = dir;
+    slideIndex = (slideIndex + dir + filteredTickets.length) % filteredTickets.length;
+    showSlide();
+}
+
+function showSlide() {
+    const t = filteredTickets[slideIndex];
+    const container = document.getElementById('slideContent');
+    const animClass = slideDirection >= 0 ? 'slide-in-right' : 'slide-in-left';
+    container.innerHTML = renderTicket(t);
+    const card = container.querySelector('.ticket');
+    if (card) {
+        card.classList.add(animClass);
+    }
+    document.getElementById('slideCounter').textContent =
+        (slideIndex + 1) + ' / ' + filteredTickets.length;
+}
+
+// 键盘导航
+document.addEventListener('keydown', e => {
+    if (!document.getElementById('slideshow').classList.contains('active')) return;
+    if (e.key === 'ArrowLeft') slideNav(-1);
+    if (e.key === 'ArrowRight') slideNav(1);
+    if (e.key === 'Escape') closeSlideshow();
+});
+
+// 滚动进入视口时触发动画（仅向下滚动）
+let cardObserver = null;
+
+function observeCards() {
+    if (cardObserver) cardObserver.disconnect();
+
+    cardObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            const card = entry.target;
+            if (entry.isIntersecting) {
+                // boundingClientRect.top > 0 表示从下方进入（向下滚动）
+                if (entry.boundingClientRect.top > 0) {
+                    card.classList.add('visible');
+                } else {
+                    card.style.opacity = '1';
+                    card.style.transform = 'none';
+                }
+            } else {
+                card.classList.remove('visible');
+                card.style.opacity = '';
+                card.style.transform = '';
+                void card.offsetWidth;
+            }
+        });
+    }, { threshold: 0.15 });
+
+    document.querySelectorAll('.ticket').forEach(card => {
+        cardObserver.observe(card);
+    });
+}
+
+// 初始化
+function init() {
+    const years = [...new Set(TICKETS.map(t => t.departure_time.substring(0, 4)))].sort();
+    const yearSel = document.getElementById('yearFilter');
+    years.forEach(y => { const o = document.createElement('option'); o.value = y; o.textContent = y; yearSel.appendChild(o); });
+
+    const names = [...new Set(TICKETS.map(t => t.name))].sort();
+    const nameSel = document.getElementById('nameFilter');
+    names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; nameSel.appendChild(o); });
+
+    ['yearFilter', 'statusFilter', 'typeFilter', 'nameFilter'].forEach(id => {
+        document.getElementById(id).addEventListener('change', applyFilters);
+    });
+
+    applyFilters();
+}
+
+init();
+</script>
+</body>
+</html>
