@@ -344,7 +344,7 @@ def step6_merge():
     print('第六步：退票/改签状态合并')
     print('=' * 50)
 
-    with open(config.TICKETS_STRUCTURED_PATH, 'r', encoding='utf-8') as f:
+    with open(config.TICKETS_FILTERED_PATH, 'r', encoding='utf-8') as f:
         tickets = json.load(f)
 
     refund_orders = set()

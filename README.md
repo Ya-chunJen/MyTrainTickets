@@ -2,6 +2,9 @@
 
 将 12306 购票邮件解析为结构化数据，生成可视化车票画廊。
 
+## 效果预览
+![](https://pubdz.paperol.cn/ryjimage/20260717151554614.png)
+
 ## 功能
 
 - 从邮件中自动提取 12306 购票信息（支持本地 .eml 文件或 IMAP 远程下载）
@@ -14,19 +17,15 @@
 - 丰富的动画效果（发牌入场、扫光、3D 倾斜、二维码发光等）
 
 ## 安装
-
-在 Claude Code 中安装此 skill：
-
-```
-/install MyTrainTickets
-```
-
-或从 GitHub 安装：
-
+从 GitHub 安装：
 ```
 /install https://github.com/renyajun/my-train-tickets
 ```
 
+从 Gitee 安装：
+```
+/install https://gitee.com/renyajun/my-train-tickets
+```
 ## 使用
 
 安装后在 Claude Code 中直接说：

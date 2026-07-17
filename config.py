@@ -51,7 +51,7 @@ BLACKLIST = [
     '张华',
 ]
 # 是否对姓名脱敏（将最后一个字替换为 *）
-NAME_MASK = False
+NAME_MASK = True
 
 # ====== HTML 可视化（step5） ======
 HTML_TEMPLATE = os.path.join(VISUALIZE_DIR, 'tickets.html')
